@@ -129,6 +129,22 @@ class Line():
         self.current_fit = np.polyfit(self.ally, self.allx, 2)
         return self.current_fit
 
+    def calc_curvature_radius(self):
+        """
+        Calculate curvature radius in meters
+        """
+        ym_per_pix = 30/720 # meters per pixel in y dimension
+        xm_per_pix = 3.7/700 # meters per pixel in x dimension
+        # Define y-value where we want radius of curvature
+        # I'll choose the maximum y-value, corresponding to the bottom of the image
+        y_eval = np.max(self.fity)
+        # Fit new polynomials to x,y in world space
+        fit_cr = np.polyfit(self.fity * ym_per_pix, self.fitx * xm_per_pix, 2)
+        # Calculate the new radii of curvature
+        self.radius_of_curvature = ((1 + (2 * fit_cr[0] * y_eval * ym_per_pix + fit_cr[1])**2)**1.5) / \
+                                   np.absolute(2 * fit_cr[0])
+        return self.radius_of_curvature
+
     def draw_poly(self, image, margin=100, plot=True):
         # Generate x and y values for plotting
         self.gen_fit(image.shape[0])
