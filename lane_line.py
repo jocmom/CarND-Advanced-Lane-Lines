@@ -89,16 +89,12 @@ class Line():
         lane_inds = np.concatenate(lane_inds)
 
         # Extract left and right line pixel positions
-        self.allx = nonzerox[lane_inds]
-        self.ally = nonzeroy[lane_inds]
-        print(len(self.allx))
-
-        # Fit a second order polynomial to each
-        self.current_fit = np.polyfit(self.ally, self.allx, 2)
+        allx = nonzerox[lane_inds]
+        ally = nonzeroy[lane_inds]
+        print("Number of data points", len(allx))
+        self.is_lane_valid(binary_warped, allx, ally)
 
         if plot:
-            # Generate x and y values for plotting
-            self.gen_fit(binary_warped.shape[0])
             out_img[nonzeroy[lane_inds], nonzerox[lane_inds]] = [255, 0, 0]
             plt.imshow(out_img)
             plt.plot(self.fitx, self.fity, color='yellow')
@@ -123,13 +119,38 @@ class Line():
                                     self.current_fit[1]*nonzeroy + self.current_fit[2] + margin)))
 
         # Again, extract left and right line pixel positions
-        self.allx = nonzerox[lane_inds]
-        self.ally = nonzeroy[lane_inds]
-        # Fit a second order polynomial to each
-        self.current_fit = np.polyfit(self.ally, self.allx, 2)
+        allx = nonzerox[lane_inds]
+        ally = nonzeroy[lane_inds]
+        self.is_lane_valid(binary_warped, allx, ally)
         return self.current_fit
 
-    def calc_curvature_radius(self):
+    def is_lane_valid(self, binary_warped, allx, ally):
+        """
+        """
+        # Fit a second order polynomial to each
+        # if len(allx) < 1000:
+        #     print("Not enough data points")
+        #     return False
+        fit = np.polyfit(ally, allx, 2)
+        print(fit)
+
+        if self.detected:
+            self.diffs = self.current_fit - fit
+            self.current_fit = self.current_fit * 0.7 + fit * 0.3
+        else:
+            self.current_fit = fit
+        self.allx = allx
+        self.ally = ally
+        # Generate x and y values for plotting
+        self.gen_fit(binary_warped.shape[0])
+        self.radius_of_curvature = self.calc_radius_of_curvature(self.fitx, self.fity)
+        self.detected = True
+        return True
+
+    def average_fit(self):
+        return 0
+
+    def calc_radius_of_curvature(self, fitx, fity):
         """
         Calculate curvature radius in meters
         """
@@ -137,17 +158,18 @@ class Line():
         xm_per_pix = 3.7/700 # meters per pixel in x dimension
         # Define y-value where we want radius of curvature
         # I'll choose the maximum y-value, corresponding to the bottom of the image
-        y_eval = np.max(self.fity)
+        y_eval = np.max(fity)
         # Fit new polynomials to x,y in world space
-        fit_cr = np.polyfit(self.fity * ym_per_pix, self.fitx * xm_per_pix, 2)
-        # Calculate the new radii of curvature
-        self.radius_of_curvature = ((1 + (2 * fit_cr[0] * y_eval * ym_per_pix + fit_cr[1])**2)**1.5) / \
+        fit_cr = np.polyfit(fity * ym_per_pix, fitx * xm_per_pix, 2)
+        # Calculate the new radius of curvature
+        radius_of_curvature = ((1 + (2 * fit_cr[0] * y_eval * ym_per_pix + fit_cr[1])**2)**1.5) / \
                                    np.absolute(2 * fit_cr[0])
-        return self.radius_of_curvature
+        return radius_of_curvature
 
-    def draw_poly(self, image, margin=100, plot=True):
-        # Generate x and y values for plotting
-        self.gen_fit(image.shape[0])
+    def draw_poly(self, image, margin=100, plot=False):
+        """
+        Draw Polygon on image, must be an image no binary
+        """
         # Create an image to draw on and an image to show the selection window
         window_img = np.zeros_like(image)
 
@@ -179,8 +201,19 @@ class Line():
         line_fit = np.array([np.transpose(np.vstack([self.fitx, self.fity]))])
         cv2.polylines(image, np.int_([line_fit]), False, (255, 255, 0), 8)
         return image
-    
+
+    def draw_curvature(self, image):
+        text = "Curvature: " + str(self.radius_of_curvature)
+        return cv2.putText(image, text, (80, 100), fontFace=cv2.FONT_HERSHEY_COMPLEX, \
+                           fontScale=1, color=(255, 255, 255), thickness=2)
+
+    def draw_center_offset(self, image):
+        text = "Center offset: " + str(self.radius_of_curvature)
+        return cv2.putText(image, text, (80, 100), fontFace=cv2.FONT_HERSHEY_COMPLEX, \
+                           fontScale=1, color=(255, 255, 255), thickness=2)
+
     def draw_all(self, image):
+        image = self.draw_poly(image)
         return image
 
 
