@@ -8,6 +8,10 @@ class Line():
     """
     Line class
     """
+    #maximum distance from lane to center in meters
+    MAX_DISTANCE_TO_BASE = 2.2
+    #minimum distance from lane to center in meters
+    MIN_DISTANCE_TO_BASE = 1.0
     def __init__(self):
         # was the line detected in the last iteration?
         self.detected = False
@@ -34,15 +38,15 @@ class Line():
         #y values for fitted line pixels
         self.fity = None
 
-    def gen_fit(self, n_points):
+    def gen_fit(self, n_points, fit):
         """
         Generate fit data for plot
         """
-        self.fity = np.linspace(0, n_points-1, n_points)
-        self.fitx = self.current_fit[0]*self.fity**2 + \
-                    self.current_fit[1]*self.fity + \
-                    self.current_fit[2]
-        return self.fity, self.fitx
+        fity = np.linspace(0, n_points-1, n_points)
+        fitx = fit[0] * fity**2 + \
+               fit[1] * fity + \
+               fit[2]
+        return fitx, fity
 
     def fit_sliding_window(self, binary_warped, base, nwindows=9, margin=100, minpix=40, plot=False):
         """
@@ -98,7 +102,7 @@ class Line():
             out_img[nonzeroy[lane_inds], nonzerox[lane_inds]] = [255, 0, 0]
             plt.imshow(out_img)
             plt.plot(self.fitx, self.fity, color='yellow')
-            plt.xlim(0, 1280)
+            plt.xlim(0, 80)
             plt.ylim(720, 0)
             plt.show()
 
@@ -127,30 +131,46 @@ class Line():
     def is_lane_valid(self, binary_warped, allx, ally):
         """
         """
-        # Fit a second order polynomial to each
         # if len(allx) < 1000:
         #     print("Not enough data points")
         #     return False
-        fit = np.polyfit(ally, allx, 2)
-        print(fit)
 
-        if self.detected:
-            self.diffs = self.current_fit - fit
-            self.current_fit = self.current_fit * 0.7 + fit * 0.3
-        else:
-            self.current_fit = fit
+        # Fit a second order polynomial to each
         self.allx = allx
         self.ally = ally
+        self.current_fit = np.polyfit(ally, allx, 2)
+        print(self.current_fit)
+        if self.detected:
+            self.diffs = self.current_fit - self.best_fit
+            #self.current_fit = self.current_fit * 0.8 + fit * 0.2
+        else:
+            self.best_fit = self.current_fit
         # Generate x and y values for plotting
-        self.gen_fit(binary_warped.shape[0])
-        self.radius_of_curvature = self.calc_radius_of_curvature(self.fitx, self.fity)
-        self.detected = True
+        self.fitx, self.fity = self.gen_fit(binary_warped.shape[0], self.current_fit)
+        self.radius_of_curvature = self.calc_radius_of_curvature()
+        self.line_base_pos = self.calc_line_base_pos(binary_warped)
+        if self.is_base_pos_valid():
+            self.detected = True
+            #self.average_fit()
+
+        return True
+
+    def is_fitx_valid(self, binary_warped, fitx):
+        if fitx[-1] < 0 | fitx[-1] > binary_warped.shape[1]:
+            return False
+        return True
+
+    def is_base_pos_valid(self):
+        if np.absolute(self.line_base_pos) > self.MAX_DISTANCE_TO_BASE or \
+           np.absolute(self.line_base_pos) < self.MIN_DISTANCE_TO_BASE:
+            return False
         return True
 
     def average_fit(self):
-        return 0
+        self.best_fit = self.best_fit * 0.8 + self.current_fit * 0.2
+        return self.best_fit
 
-    def calc_radius_of_curvature(self, fitx, fity):
+    def calc_radius_of_curvature(self):
         """
         Calculate curvature radius in meters
         """
@@ -158,13 +178,22 @@ class Line():
         xm_per_pix = 3.7/700 # meters per pixel in x dimension
         # Define y-value where we want radius of curvature
         # I'll choose the maximum y-value, corresponding to the bottom of the image
-        y_eval = np.max(fity)
+        y_eval = np.max(self.fity)
         # Fit new polynomials to x,y in world space
-        fit_cr = np.polyfit(fity * ym_per_pix, fitx * xm_per_pix, 2)
+        fit_cr = np.polyfit(self.fity * ym_per_pix, self.fitx * xm_per_pix, 2)
         # Calculate the new radius of curvature
         radius_of_curvature = ((1 + (2 * fit_cr[0] * y_eval * ym_per_pix + fit_cr[1])**2)**1.5) / \
                                    np.absolute(2 * fit_cr[0])
         return radius_of_curvature
+
+    def calc_line_base_pos(self, image):
+        xm_per_pix = 3.7/700 # meters per pixel in x dimension
+        image_center = int(image.shape[1]/2)
+        # line base is last element of x values
+        self.line_base_pos = image_center - self.fitx[-1]
+        self.line_base_pos *= xm_per_pix
+        print(self.line_base_pos)
+        return self.line_base_pos
 
     def draw_poly(self, image, margin=100, plot=False):
         """
@@ -202,14 +231,15 @@ class Line():
         cv2.polylines(image, np.int_([line_fit]), False, (255, 255, 0), 8)
         return image
 
-    def draw_curvature(self, image):
-        text = "Curvature: " + str(self.radius_of_curvature)
-        return cv2.putText(image, text, (80, 100), fontFace=cv2.FONT_HERSHEY_COMPLEX, \
+    def draw_curvature(self, image, pos=(80,100)):
+        #text = "Curvature: " + str(self.radius_of_curvature)
+        text = '{}{:+6.0f}{}'.format("Curvature: ", self.radius_of_curvature, " m")
+        return cv2.putText(image, text, pos, fontFace=cv2.FONT_HERSHEY_COMPLEX, \
                            fontScale=1, color=(255, 255, 255), thickness=2)
 
-    def draw_center_offset(self, image):
-        text = "Center offset: " + str(self.radius_of_curvature)
-        return cv2.putText(image, text, (80, 100), fontFace=cv2.FONT_HERSHEY_COMPLEX, \
+    def draw_center_offset(self, image, pos=(740,100)):
+        text = '{}{:+4.2f}{}'.format("Center offset: ", self.line_base_pos, " m")
+        return cv2.putText(image, text, pos, fontFace=cv2.FONT_HERSHEY_COMPLEX, \
                            fontScale=1, color=(255, 255, 255), thickness=2)
 
     def draw_all(self, image):
