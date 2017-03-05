@@ -102,7 +102,7 @@ class Line():
             out_img[nonzeroy[lane_inds], nonzerox[lane_inds]] = [255, 0, 0]
             plt.imshow(out_img)
             plt.plot(self.fitx, self.fity, color='yellow')
-            plt.xlim(0, 80)
+            plt.xlim(0, 1280)
             plt.ylim(720, 0)
             plt.show()
 
@@ -117,48 +117,59 @@ class Line():
         nonzero = binary_warped.nonzero()
         nonzeroy = np.array(nonzero[0])
         nonzerox = np.array(nonzero[1])
-        lane_inds = ((nonzerox > (self.current_fit[0]*(nonzeroy**2) + \
-                                    self.current_fit[1]*nonzeroy + self.current_fit[2] - margin)) & \
-                        (nonzerox < (self.current_fit[0]*(nonzeroy**2) + \
-                                    self.current_fit[1]*nonzeroy + self.current_fit[2] + margin)))
+        lane_inds = ((nonzerox > (self.best_fit[0]*(nonzeroy**2) + \
+                                    self.best_fit[1]*nonzeroy + self.best_fit[2] - margin)) & \
+                        (nonzerox < (self.best_fit[0]*(nonzeroy**2) + \
+                                    self.best_fit[1]*nonzeroy + self.best_fit[2] + margin)))
 
         # Again, extract left and right line pixel positions
         allx = nonzerox[lane_inds]
         ally = nonzeroy[lane_inds]
         self.is_lane_valid(binary_warped, allx, ally)
-        return self.current_fit
+        return self.best_fit
 
     def is_lane_valid(self, binary_warped, allx, ally):
         """
         """
-        # if len(allx) < 1000:
-        #     print("Not enough data points")
-        #     return False
+        if len(allx) < 100:
+            print("Not enough data points")
+            return False
 
         # Fit a second order polynomial to each
         self.allx = allx
         self.ally = ally
         self.current_fit = np.polyfit(ally, allx, 2)
-        print(self.current_fit)
         if self.detected:
-            self.diffs = self.current_fit - self.best_fit
-            #self.current_fit = self.current_fit * 0.8 + fit * 0.2
+            self.diffs = np.absolute(self.current_fit - self.best_fit)
+            if self.is_fit_diff_valid() == False:
+                return False
         else:
             self.best_fit = self.current_fit
         # Generate x and y values for plotting
-        self.fitx, self.fity = self.gen_fit(binary_warped.shape[0], self.current_fit)
+        self.fitx, self.fity = self.gen_fit(binary_warped.shape[0], self.best_fit)
         self.radius_of_curvature = self.calc_radius_of_curvature()
         self.line_base_pos = self.calc_line_base_pos(binary_warped)
-        if self.is_base_pos_valid():
-            self.detected = True
+        #if self.is_base_pos_valid():
+        self.detected = True
+        #self.best_fit = self.current_fit
+        self.best_fit = self.best_fit * 0.9 + self.current_fit * 0.1   
+        self.fitx, self.fity = self.gen_fit(binary_warped.shape[0], self.best_fit)
+        #if self.detected == True:
             #self.average_fit()
 
         return True
 
     def is_fitx_valid(self, binary_warped, fitx):
-        if fitx[-1] < 0 | fitx[-1] > binary_warped.shape[1]:
+        if fitx[-1] < 0 or fitx[-1] > binary_warped.shape[1]:
             return False
         return True
+
+    def is_fit_diff_valid(self):
+        if self.diffs[1] > 2 or self.diffs[0] > 0.002:
+            print("DIFF", self.diffs)
+            return False
+        return True
+
 
     def is_base_pos_valid(self):
         if np.absolute(self.line_base_pos) > self.MAX_DISTANCE_TO_BASE or \
@@ -192,7 +203,6 @@ class Line():
         # line base is last element of x values
         self.line_base_pos = image_center - self.fitx[-1]
         self.line_base_pos *= xm_per_pix
-        print(self.line_base_pos)
         return self.line_base_pos
 
     def draw_poly(self, image, margin=100, plot=False):
