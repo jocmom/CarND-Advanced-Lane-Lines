@@ -1,3 +1,4 @@
+
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
@@ -95,7 +96,7 @@ class Line():
         # Extract left and right line pixel positions
         allx = nonzerox[lane_inds]
         ally = nonzeroy[lane_inds]
-        print("Number of data points", len(allx))
+        #print("Number of data points", len(allx))
         self.is_lane_valid(binary_warped, allx, ally)
 
         if plot:
@@ -130,6 +131,7 @@ class Line():
 
     def is_lane_valid(self, binary_warped, allx, ally):
         """
+        Check wheter lane is valid and if so calculate best fit
         """
         if len(allx) < 100:
             print("Not enough data points")
@@ -140,7 +142,6 @@ class Line():
         self.ally = ally
         self.current_fit = np.polyfit(ally, allx, 2)
         if self.detected:
-            self.diffs = np.absolute(self.current_fit - self.best_fit)
             if self.is_fit_diff_valid() == False:
                 return False
         else:
@@ -149,36 +150,49 @@ class Line():
         self.fitx, self.fity = self.gen_fit(binary_warped.shape[0], self.best_fit)
         self.radius_of_curvature = self.calc_radius_of_curvature()
         self.line_base_pos = self.calc_line_base_pos(binary_warped)
-        #if self.is_base_pos_valid():
-        self.detected = True
+        if self.is_base_pos_valid() == False: 
+            return False
+        self.average_fit()
         #self.best_fit = self.current_fit
-        self.best_fit = self.best_fit * 0.9 + self.current_fit * 0.1   
         self.fitx, self.fity = self.gen_fit(binary_warped.shape[0], self.best_fit)
-        #if self.detected == True:
-            #self.average_fit()
-
+        self.detected = True
         return True
 
     def is_fitx_valid(self, binary_warped, fitx):
+        """
+        Sanity check to detect whether origin is outside of image
+        """
         if fitx[-1] < 0 or fitx[-1] > binary_warped.shape[1]:
+            print("Sanity Check: Origin not valid")
             return False
         return True
 
     def is_fit_diff_valid(self):
-        if self.diffs[1] > 2 or self.diffs[0] > 0.002:
-            print("DIFF", self.diffs)
+        """
+        Sanity check with comparison of the polynomial coefficients from best fit 
+        """
+        self.diffs = np.absolute(self.current_fit - self.best_fit)
+        #if self.diffs[1] > 0.5 or self.diffs[0] > 0.0005:
+        if self.diffs[1] > 1 or self.diffs[0] > 0.001:
+            print("Sanity Check: Difference to best fit too big", self.diffs)
             return False
         return True
-
 
     def is_base_pos_valid(self):
+        """
+        Sanity check: Is the base position of the car correct
+        """
         if np.absolute(self.line_base_pos) > self.MAX_DISTANCE_TO_BASE or \
            np.absolute(self.line_base_pos) < self.MIN_DISTANCE_TO_BASE:
+            print("Sanity Check: Invalid base position", self.line_base_pos)
             return False
         return True
 
-    def average_fit(self):
-        self.best_fit = self.best_fit * 0.8 + self.current_fit * 0.2
+    def average_fit(self, factor=0.1):
+        """
+        Average best fit with current fit
+        """
+        self.best_fit = self.best_fit * (1-factor) + self.current_fit * factor
         return self.best_fit
 
     def calc_radius_of_curvature(self):
@@ -222,9 +236,6 @@ class Line():
         cv2.fillPoly(window_img, np.int_([line_pts]), (0, 255, 0))
         cv2.fillPoly(window_img, np.int_([line_pts]), (0, 255, 0))
         image = cv2.addWeighted(image, 1, window_img, 0.3, 0)
-        # Color in left and right line pixels
-        self.draw_pixels(image)
-        self.draw_fit(image)
 
         if plot:
             plt.imshow(image)
@@ -233,27 +244,45 @@ class Line():
         return image
 
     def draw_pixels(self, image):
+        """
+        Draw detected lane pixels
+        """
         image[self.ally, self.allx] = [255, 0, 0]
         return image
 
     def draw_fit(self, image):
+        """
+        Draw calculated fit
+        """
         line_fit = np.array([np.transpose(np.vstack([self.fitx, self.fity]))])
-        cv2.polylines(image, np.int_([line_fit]), False, (255, 255, 0), 8)
+        cv2.polylines(image, np.int_([line_fit]), False, (50, 255, 255), 16)
         return image
 
     def draw_curvature(self, image, pos=(80,100)):
+        """
+        Print curvature text
+        """
         #text = "Curvature: " + str(self.radius_of_curvature)
         text = '{}{:+6.0f}{}'.format("Curvature: ", self.radius_of_curvature, " m")
         return cv2.putText(image, text, pos, fontFace=cv2.FONT_HERSHEY_COMPLEX, \
                            fontScale=1, color=(255, 255, 255), thickness=2)
 
     def draw_center_offset(self, image, pos=(740,100)):
+        """
+        Print Offset from lane center text
+        """
         text = '{}{:+4.2f}{}'.format("Center offset: ", self.line_base_pos, " m")
         return cv2.putText(image, text, pos, fontFace=cv2.FONT_HERSHEY_COMPLEX, \
                            fontScale=1, color=(255, 255, 255), thickness=2)
 
     def draw_all(self, image):
-        image = self.draw_poly(image)
+        """
+        Draw all kind of stuff
+        """
+        #image = self.draw_poly(image)
+        # Color in left and right line pixels
+        image = self.draw_pixels(image)
+        image = self.draw_fit(image)
         return image
 
 
