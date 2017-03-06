@@ -33,6 +33,8 @@ Following files are provided:
 [pipeline]: ./output_images/pipe.png "Pipeline"
 [bird]: ./output_images/bird_eye_view.png "Bird-Eye View"
 [transform]: ./output_images/color_sobel_transformation.png "Color/Sobel Transformation"
+[mag_abs]: ./output_images/mag_abs.png "Mag/Abs Sobel Operation"
+[result]: ./output_images/result.png "Result Image"
 [video1]: ./project_video.mp4 "Video"
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/571/view) Points
@@ -44,7 +46,7 @@ Following files are provided:
 
 The code for this step is contained in the 3-5 code cells of the IPython notebook located in "P4.ipynb".  
 
-Camera images often suffer from distorted images, like radial and tangential distortion. With the help of some calibration images we define the distortion coefficients which can be applied to undistort the images taken by this camera. As calibration images chessboards are very suitable because of their known structure.
+Camera images often suffer from distorted images, like radial and tangential distortion. With the help of some calibration images we define the distortion coefficients which can be applied to undistort the images taken by this camera. They describe the relationshipt between the 3D point  coordinates and the position of this point on the image pixels. As calibration images chessboards are very suitable because of their known structure. 
 I start by preparing "object points" (cell 3), which will be the (x, y, z) coordinates of the chessboard corners in the world. Here I am assuming the chessboard is fixed on the (x, y) plane at z=0, such that the object points are the same for each calibration image.  Thus, `objp` is just a replicated array of coordinates, and `objpoints` will be appended with a copy of it every time I successfully detect all chessboard corners in a test image.  `imgpoints` will be appended with the (x, y) pixel position of each of the corners in the image plane with each successful chessboard detection.  
 
 I then used the output `objpoints` and `imgpoints` to compute the camera calibration and distortion coefficients using the `cv2.calibrateCamera()` function.  I applied this distortion correction to the chessboard image using the `cv2.undistort()` function and obtained this result: 
@@ -90,7 +92,7 @@ Below a picture of warped image you can see that the lanes are nearly parallel.
 ![alt text][bird]
 
 #### 3. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
-After warping a combination of color and gradient thresholds are applied to the image to generate a binary image (cell 9-13). The color thresholds are pretty straightforward and are just thresholding the channels of some color spaces. The sobel thresholds . As you can see in the notebook I played around with a lot of threshold functions and in the end I decided to apply the following:
+After warping a combination of color and gradient thresholds are applied to the image to generate a binary image (cell 9-13). The color thresholds are pretty straightforward and are just thresholding the channels of some color spaces. The sobel is a derivative mask that can be applied in vertical and horizontal  direction and is used for edge detection. In our case to detect the lanes. As you can see in the notebook I played around with a lot of threshold functions and in the end I decided to apply the following:
 * Color thresholds:
     - R channel of the RGB color space (222,255)
     - V channel of the HSV color space (220, 255)
@@ -98,6 +100,9 @@ After warping a combination of color and gradient thresholds are applied to the 
 * Sobel thresholds:
     - Magnitude sobel on the V channel of the HSV color space (50, 200)
     - Magnitude sobel on the S channel of the HSV color space (80, 200)
+Here you can see one absolute and magnitude sobel thresholds on the original test images:
+
+![alt text][mag_abs]
 
 All thresholds are combined via a bitwise OR (cell 12). Here's an example of my output for this step.  (note: this is not actually from one of the test images)
 
@@ -105,19 +110,23 @@ All thresholds are combined via a bitwise OR (cell 12). Here's an example of my 
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
-Then I did some other stuff and fit my lane lines with a 2nd order polynomial kinda like this:
+In cell 17 of the notebook in the function `get_lane_base` we are making histogram based search for the lane base on the bottom half of the image by identifying the peaks. These results are the input for the `fit_sliding_window` (lane_line.py: 52) function of the `Line` class in file `lane_line.py`. Here we are sliding a small window from bottom to the top of the line. The mean of previous window valus is the center of the next window. Once the lane is detected the sliding window approach can be skipped and we can use the `fit_previous` function (lane_line.py: 112), where the fit of the previous lane and a margin is used to find the pixel of the new lane. With the detected pixels we calculate the second order polynom to fit the data. Overall the `Line` class which base was provided by course stores all properties of the lane and it's fit and alsp provides some the fit, drawing and sanity check functions.
+Below you see the identified pixels and the fitted line of the second order polynom:
 
 ![alt text][image5]
 
 #### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 
-I did this in lines # through # in my code in `my_other_file.py`
+In the class `Line` in `lane_line.py` on line 198 the function `calc_radius_of_curvature` is defined. It calculate the radius of the curve in a point by approximating a circle with the same tangent. [Here](http://www.intmath.com/applications-differentiation/8-radius-curvature.php) you find more information about this topic. The radius can be used for steering.
+
+On line 214 the method `calc_line_base_pos` calculates the offset from the lane of the center. Like mentioned in the course I assume the lane to have a width of 3.7m and therefore the conversion from pixels to meter is set to 3.7/700 meter/pixel. Each lane calculates it's own offset from the center, by adding these two values the offset from the car from the center can easily determined.
+
 
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
-I implemented this step in lines # through # in my code in `yet_another_file.py` in the function `map_lane()`.  Here is an example of my result on a test image:
+I implemented this step in cell 20 of the notebook in the function `process_image`. It executes the process described above on one image by using the `Line` class. Here is an example of my result on a test image:
 
-![alt text][image6]
+![alt text][result]
 
 ---
 
@@ -144,4 +153,4 @@ Here I'll talk about the approach I took, what techniques I used, what worked an
 
 [The original writeup template](https://github.com/udacity/CarND-Advanced-Lane-Lines/blob/master/writeup_template.md)
 
-
+[Radius of curvature](http://www.intmath.com/applications-differentiation/8-radius-curvature.php)

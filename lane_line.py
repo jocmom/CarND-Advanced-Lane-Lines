@@ -172,8 +172,8 @@ class Line():
         Sanity check with comparison of the polynomial coefficients from best fit 
         """
         self.diffs = np.absolute(self.current_fit - self.best_fit)
-        #if self.diffs[1] > 0.5 or self.diffs[0] > 0.0005:
-        if self.diffs[1] > 1 or self.diffs[0] > 0.001:
+        if self.diffs[1] > 0.5 or self.diffs[0] > 0.0005:
+        #if self.diffs[1] > 1 or self.diffs[0] > 0.001:
             print("Sanity Check: Difference to best fit too big", self.diffs)
             return False
         return True
