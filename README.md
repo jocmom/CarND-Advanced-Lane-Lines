@@ -32,6 +32,7 @@ Following files are provided:
 [image6]: ./examples/example_output.jpg "Output"
 [pipeline]: ./output_images/pipe.png "Pipeline"
 [bird]: ./output_images/bird_eye_view.png "Bird-Eye View"
+[histo]: ./output_images/histo.png "Lane origins Histogram"
 [transform]: ./output_images/color_sobel_transformation.png "Color/Sobel Transformation"
 [mag_abs]: ./output_images/mag_abs.png "Mag/Abs Sobel Operation"
 [result]: ./output_images/result.png "Result Image"
@@ -110,7 +111,11 @@ All thresholds are combined via a bitwise OR (cell 12). Here's an example of my 
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
-In cell 17 of the notebook in the function `get_lane_base` we are making histogram based search for the lane base on the bottom half of the image by identifying the peaks. These results are the input for the `fit_sliding_window` (lane_line.py: 52) function of the `Line` class in file `lane_line.py`. Here we are sliding a small window from bottom to the top of the line. The mean of previous window valus is the center of the next window. Once the lane is detected the sliding window approach can be skipped and we can use the `fit_previous` function (lane_line.py: 112), where the fit of the previous lane and a margin is used to find the pixel of the new lane. With the detected pixels we calculate the second order polynom to fit the data. Overall the `Line` class which base was provided by course stores all properties of the lane and it's fit and alsp provides some the fit, drawing and sanity check functions.
+In cell 17 of the notebook in the function `get_lane_base` we are making histogram based search for the lane base on the bottom half of the image by identifying the peaks. 
+
+![alt text][histo]
+
+These results are the input for the `fit_sliding_window` (lane_line.py: 52) function of the `Line` class in file `lane_line.py`. Here we are sliding a small window from bottom to the top of the line. The mean of previous window valus is the center of the next window. Once the lane is detected the sliding window approach can be skipped and we can use the `fit_previous` function (lane_line.py: 112), where the fit of the previous lane and a margin is used to find the pixel of the new lane. With the detected pixels we calculate the second order polynom to fit the data. Overall the `Line` class which base was provided by course stores all properties of the lane, it's fit, some drawing and sanity check functions.
 Below you see the identified pixels and the fitted line of the second order polynom:
 
 ![alt text][image5]
@@ -119,12 +124,17 @@ Below you see the identified pixels and the fitted line of the second order poly
 
 In the class `Line` in `lane_line.py` on line 198 the function `calc_radius_of_curvature` is defined. It calculate the radius of the curve in a point by approximating a circle with the same tangent. [Here](http://www.intmath.com/applications-differentiation/8-radius-curvature.php) you find more information about this topic. The radius can be used for steering.
 
-On line 214 the method `calc_line_base_pos` calculates the offset from the lane of the center. Like mentioned in the course I assume the lane to have a width of 3.7m and therefore the conversion from pixels to meter is set to 3.7/700 meter/pixel. Each lane calculates it's own offset from the center, by adding these two values the offset from the car from the center can easily determined.
-
+On line 214 the method `calc_line_base_pos` calculates the offset from the center of the car to each lane. Like mentioned in the course I assume the lane to have a width of 3.7m and therefore the conversion from pixels to meter is set to 3.7/700 meter/pixel. Each lane calculates it's own offset from the center, by adding these two values the offset from the center of the car to the center of the lane can easily determined. In the end curvature and offset are printed on the image.
 
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
-I implemented this step in cell 20 of the notebook in the function `process_image`. It executes the process described above on one image by using the `Line` class. Here is an example of my result on a test image:
+I implemented this step in cell 20 of the notebook in the function `process_image`. It executes the process described above on one image by using the `Line` class. The `Line` class provides also methods to print the fit on the image. Other steps taken here is averaging the current fit with the best fit from previous imagas though filtering out bad fits. There are also sanity checks, like
+
+* are there enough data points (line: 136)
+* checking the difference of the coefficients from the current and the best fit (line: 170)
+* is the offset from the lane valid (line: 181)
+
+Below is an example of my result on a test image:
 
 ![alt text][result]
 
@@ -142,11 +152,19 @@ Here's a [link to my video result](./project_video.mp4)
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
+I had a look on several color spaces and also different sobel algorithms and was pretty taff finding the right thresholds and combinations. I got a solution which was working OK for the project video but not working at all on the challenge video. So I tweaked the pipeline for the challenge video (especially adding some threshold in the V color space) till this was OK and then this pipeline was wobbling a lot more on the project video. 
+I went back to the current solution which works quite good on the project video but not so good on the challenge. So overall generalization is a big point again.
 
-- hardcoded source destination points
-- average left right lane
-- take the derivative of the fit as sanity check
+I've seen now another solution which is focusing on white and yellow colors and maybe this is the best way to go but basic thought was not to focus too much on special colors.
+
+There a lot of more ideas spinning around but at some point I have to submit :)
+
+- I think the hardcoded source and destination are not the best way to go
+- Have a look on other color spaces
+- There are other edge detection algorithms than sobel
+- Maybe average left and right lane or least compare them in some way
+- Sanity check by taking the derivative of the fit 
+- Sanity check of curvature
 
 ## References
 [Udacity Repository](https://github.com/udacity/CarND-Advanced-Lane-Lines)
